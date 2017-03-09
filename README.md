@@ -10,7 +10,7 @@
 ====
 
 ##关于改进
-pywinauto底层也用消息，但是会判断消息的返回值，会有超时、异常等信息。所以<font color = red text="使用pywinauto比直接使用ctypes发消息健壮性要强一些">。
+pywinauto底层也用消息，但是会判断消息的返回值，会有超时、异常等信息。所以<font color = red text="使用pywinauto比直接使用ctypes发消息健壮性要强一些"/>。
 故而将买卖设置文本的部分换成了pywinauto的方式。
 
 =====
