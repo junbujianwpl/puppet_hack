@@ -169,7 +169,7 @@ class unity():
         time.sleep(1)
         return pyperclip.paste()
 
-    @staticmethod
+    @staticmethod 
     def __set_text(handle, txt, by_msg=False):
         if by_msg:
             return op.SendMessageW(handle, WM_SETTEXT, 0, txt)
