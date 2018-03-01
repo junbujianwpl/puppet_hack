@@ -1,4 +1,6 @@
 """puppetrader for ths client uniform"""
+import util.BaseTypeUtil
+
 __author__ = '睿瞳深邃(https://github.com/Raytone-D)'
 __project__ = '扯线木偶(puppetrader for ths client unity)'
 __version__ = "0.3.5"
@@ -10,10 +12,15 @@ from functools import reduce
 import time
 import pyperclip
 import json
-from pywinauto import Application
-from pywinauto import Desktop
-import PyStockTask
-import puppet.puppet_v4
+from pywinauto import Application, keyboard
+from pywinauto import Desktop, findwindows
+from lab import PyStockTask
+from win32con import *  # get all Msg relating constants
+from win32gui import *  # import SendMessageTimeout
+from util.InspectUtil import print_time
+
+# import PyStockTask
+# import puppet.puppet_v4
 
 # import PyConfig
 
@@ -49,8 +56,7 @@ def copy_data(handle):
 
 
 class POINT(ctypes.Structure):
-    _fields_ = [("x", ctypes.c_int),
-                ("y", ctypes.c_int)]
+    _fields_ = [("x", ctypes.c_int), ("y", ctypes.c_int)]
 
 
 class unity():
@@ -81,17 +87,18 @@ class unity():
 
         self.tree_handle = reduce(op.GetDlgItem, self.tree_path, main)
         self.ipo_grid_handle = reduce(op.GetDlgItem, self.ipo_grid_path, main)
-        print(ctypes.WinError())
-        print("tree_handle:%d ipo_grid_handle:%d" % (self.tree_handle, self.ipo_grid_handle))
-        print("members:")
-        print(self.members)
+        print_time(ctypes.WinError())
+        print_time("tree_handle:%d ipo_grid_handle:%d" % (self.tree_handle,
+                                                          self.ipo_grid_handle))
+        print_time("members:")
+        print_time(self.members)
         # 获取登录账号
         self.account = reduce(op.GetDlgItem, (59392, 0, 1711), main)
         op.SendMessageW(self.account, WM_GETTEXT, 32, self.buff)
         self.account = self.buff.value
 
-        print("account:")
-        print(self.account)
+        print_time("account:")
+        print_time(self.account)
 
         # 撤单工具条
         self.id_toolbar = {'全选': 1098, \
@@ -105,12 +112,16 @@ class unity():
         op.SendMessageW(main, WM_COMMAND, 163, 0)  # 切换到撤单操作台
         wait_a_second()
         self.cancel_panel = reduce(op.GetDlgItem, (59648, 59649), main)
-        self.cancel_toolbar = {k: op.GetDlgItem(self.cancel_panel, v) for k, v in self.id_toolbar.items()}
+        self.cancel_toolbar = {
+            k: op.GetDlgItem(self.cancel_panel, v)
+            for k, v in self.id_toolbar.items()
+        }
         keystroke(main, F6)  # 切换到双向委托
+        self._app = Application().connect(handle=self.main)
 
     def buy(self, symbol, price, qty):  # 买入(B)
         # buy = order('b')
-        self.__set_text(self.members[1032],  symbol)
+        self.__set_text(self.members[1032], symbol)
         self.__set_text(self.members[1033], price)
         # op.SendMessageW(self.members[1034], WM_SETTEXT, 0, qty)
         self.__set_text(self.members[1034], qty)
@@ -134,18 +145,27 @@ class unity():
         if symbol:
             op.SendMessageW(self.cancel_toolbar['填单'], WM_SETTEXT, 0, symbol)
             time.sleep(0.1)  # 必须有
-            op.PostMessageW(self.cancel_panel, WM_COMMAND, self.id_toolbar['查单'], self.cancel_toolbar['查单'])
-            op.PostMessageW(self.cancel_panel, WM_COMMAND, self.id_toolbar['撤单'], self.cancel_toolbar['撤单'])
+            op.PostMessageW(self.cancel_panel, WM_COMMAND,
+                            self.id_toolbar['查单'], self.cancel_toolbar['查单'])
+            op.PostMessageW(self.cancel_panel, WM_COMMAND,
+                            self.id_toolbar['撤单'], self.cancel_toolbar['撤单'])
             keystroke(self.main, F6)  # 必须返回双向委托操作台!
 
     def cancel_all(self):  # 全撤(Z)
-        op.PostMessageW(self.two_way, WM_COMMAND, 30001, self.members[30001])
+        # op.PostMessageW(self.two_way, WM_COMMAND, 30001, self.members[30001])
+        self._app.top_window().window_(best_match="全撤(Z)Button").wait("visible", 0.5)
+        self._app.top_window().window_(best_match="全撤(Z)Button", visible_only=True).click()
 
     def cancel_buy(self):  # 撤买(X)
-        op.PostMessageW(self.two_way, WM_COMMAND, 30002, self.members[30002])
+        # op.PostMessageW(self.two_way, WM_COMMAND, 30002, self.members[30002])
+        self._app.top_window().window_(best_match="撤买(X)Button").wait("visible", 0.5)
+        self._app.top_window().window_(best_match="撤买(X)Button", visible_only=True).click()
+        # keyboard.SendKeys("X")
 
     def cancel_sell(self):  # 撤卖(C)
-        op.PostMessageW(self.two_way, WM_COMMAND, 30003, self.members[30003])
+        # op.PostMessageW(self.two_way, WM_COMMAND, 30003, self.members[30003])
+        self._app.top_window().window_(best_match="撤卖(C)Button").wait("visible", 0.5)
+        self._app.top_window().window_(best_match="撤卖(C)Button", visible_only=True).click()
 
     def cancel_last(self):  # 撤最后一笔，仅限华泰定制版有效
         op.PostMessageW(self.two_way, WM_COMMAND, 2053, self.members[2053])
@@ -154,6 +174,10 @@ class unity():
         # op.PostMessageW(self.two_way, WM_COMMAND, 30022, self.members[30022])
         pass
 
+    def is_client_dead(self):
+        return 0 == SendMessageTimeout(self.main, WM_NULL, 0, 0,
+                                       SMTO_ABORTIFHUNG | SMTO_BLOCK, 2000)
+
     def balance(self):  # 可用余额
         op.SendMessageW(self.members[1038], WM_GETTEXT, 32, self.buff)
         return self.buff.value
@@ -161,11 +185,12 @@ class unity():
     def get_data(self, key='W'):
         """"将CVirtualGridCtrl|Custom<n>的数据复制到剪贴板，默认取持仓记录"""
         pyperclip.copy("")
-        print("get data %c" % key)
+        print_time("get data %c" % key)
         keystroke(self.main, F6)
         keystroke(self.two_way, ord(key))  # 切换到持仓('W')、成交('E')、委托('R')
         wait_a_second(8)  # 等待券商的数据返回...
-        op.SendMessageW(self.grid, WM_COMMAND, 57634, self.path_grid[-1])  # background mode
+        op.SendMessageW(self.grid, WM_COMMAND, 57634,
+                        self.path_grid[-1])  # background mode
         time.sleep(1)
         return pyperclip.paste()
 
@@ -176,22 +201,30 @@ class unity():
         else:
             Desktop()["股票交易系统"].window(handle=handle).set_text(txt)
 
+    def type_keys(self, keys):
+        # app = Application().connect(handle=self.main)
+        # app["股票交易系统"].type_keys(keys)
+        keyboard.SendKeys(keys)
+
     def ipo(self):
         pyperclip.copy("")
         app = Application().connect(handle=self.main)
         app["股票交易系统"].window(handle=self.tree_handle).select("\\新股申购\\新股批量申购")
-        print(self.tree_handle)
+        print_time(self.tree_handle)
         time.sleep(9)
         app.top_window()["确定"].click()
-        print(" width:%d,height:%d", self.screen_width, self.screen_height)
-        self.ipo_grid_handle = op.WindowFromPoint(POINT(int(self.screen_width / 2), int(self.screen_height / 2)))
-        print(ctypes.WinError())
-        print(op.SendMessageW(self.ipo_grid_handle, WM_COMMAND, 57634, self.ipo_grid_path[-1]))
-        print("ipo grid handle:%d" % self.ipo_grid_handle)
+        print_time(" width:%d,height:%d", self.screen_width, self.screen_height)
+        self.ipo_grid_handle = op.WindowFromPoint(
+            POINT(int(self.screen_width / 2), int(self.screen_height / 2)))
+        print_time(ctypes.WinError())
+        print_time(
+            op.SendMessageW(self.ipo_grid_handle, WM_COMMAND, 57634,
+                            self.ipo_grid_path[-1]))
+        print_time("ipo grid handle:%d" % self.ipo_grid_handle)
         can_ipo = pyperclip.paste()
-        print(ctypes.WinError())
-        print(can_ipo)
-        dict_ipo = PyStockTask.analyze_position(can_ipo)
+        print_time(ctypes.WinError())
+        print_time(can_ipo)
+        dict_ipo = util.BaseTypeUtil.analyze_position(can_ipo)
         pos = []
         for (j, k) in zip(dict_ipo.values(), range(1, 10, 1)):
             if float(dict(j).get("可申购数量")) > 0.99:
@@ -202,10 +235,10 @@ class unity():
         height = 16
         x = rect.left + 10
         first = rect.top + 20 + height / 2
-        print(pos)
+        print_time(pos)
         for i in pos:
             y = first + (i - 1) * height
-            print("x:%d,y:%d,i:%d" % (x, y, i))
+            print_time("x:%d,y:%d,i:%d" % (x, y, i))
             mouse_move_click(int(x), int(y))
 
         app["股票交易系统"]["申购Button"].click()
@@ -219,7 +252,8 @@ def finder():
     team = set()
     buff = ctypes.create_unicode_buffer(32)
 
-    @ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+    @ctypes.WINFUNCTYPE(ctypes.wintypes.BOOL, ctypes.wintypes.HWND,
+                        ctypes.wintypes.LPARAM)
     def check(hwnd, extra):
         if op.IsWindowVisible(hwnd):
             op.GetWindowTextW(hwnd, buff, 32)
@@ -242,35 +276,52 @@ def to_dict(raw):
 
 if __name__ == '__main__':
 
-    # print(op.WindowFromPoint((30, 40)))
+    id_members = 1032, 1033, 1034, 1006, 1035, 1058, 1039, 1008, 30001, 30002, 30003, \
+                 32790, 1038, 1047, 2053, 30022, 1019  # 刷新，余额、表格、最后一笔、撤相同
+
+    # print_time(op.WindowFromPoint((30, 40)))
     # PyConfig.path_exp()
     # ipo_grid_id = 0xc8, 0x417
     # ipo_grid_handle = 0x8105a
-    # print(op.SendMessageW(ipo_grid_handle, WM_COMMAND, 57634, ipo_grid_id[-1]))
-    # print(pyperclip.paste())
+    # print_time(op.SendMessageW(ipo_grid_handle, WM_COMMAND, 57634, ipo_grid_id[-1]))
+    # print_time(pyperclip.paste())
 
-    app = Desktop()["股票交易系统"]
-    pup = puppet.puppet_v4.Puppet(app.handle)
+    main_wnd = Desktop()["股票交易系统"]
+    app = Application().connect(handle=main_wnd.handle)
+    pup = unity(main_wnd.handle)
+    # test is_client_dead
+    while True:
+        print_time(pup.is_client_dead())
+        time.sleep(3)
+
+    for id in id_members:
+        print_time("find id=%x" % id)
+        # controls = findwindows.find_windows(control_id=id)
+        controls = app.windows(control_id=id)
+        print_time(controls)
+        for c in controls:
+            c.print_time_control_identifiers()
     pup.buy("000001", "9.33", "1000")
+    exit(0)
     pup.raffle(True)
 
     for i in range(1, 100):
-        ctrl = app[str("CVirtualGridCtrl%d" % i)]
+        ctrl = main_wnd[str("CVirtualGridCtrl%d" % i)]
         if ctrl.exists():
-            print("%x" % ctrl.handle)
-            print(copy_data(ctrl.handle))
+            print_time("%x" % ctrl.handle)
+            print_time(copy_data(ctrl.handle))
         else:
             break
 
-    # app.window(handle=0x306ac).Select("\\新股申购\\新股申购")
-    # print(app.window(handle=ipo_grid_handle).exists())
-    # print(app.window(handle=ipo_grid_handle).texts())
-    # print(app.window(handle=ipo_grid_handle).item_count())
-    # print(app.window(handle=ipo_grid_handle).column_count())
-    # grid = app.window(handle=ipo_grid_handle)
-    # app.PrintControlIdentifiers()
-    print(app.CVirtualGridCtrl2.WrapObject().text())
-    print("%s %d" % (grid.window_text(), grid.columns()))
+    # main_wnd.window(handle=0x306ac).Select("\\新股申购\\新股申购")
+    # print_time(main_wnd.window(handle=ipo_grid_handle).exists())
+    # print_time(main_wnd.window(handle=ipo_grid_handle).texts())
+    # print_time(main_wnd.window(handle=ipo_grid_handle).item_count())
+    # print_time(main_wnd.window(handle=ipo_grid_handle).column_count())
+    # grid = main_wnd.window(handle=ipo_grid_handle)
+    # main_wnd.PrintControlIdentifiers()
+    print_time(main_wnd.CVirtualGridCtrl2.WrapObject().text())
+    print_time("%s %d" % (grid.window_text(), grid.columns()))
     myRegister = {'券商登录号': '自定义名称', \
                   '617145470': '东方不败', \
                   '20941552121212': '西门吹雪'}
@@ -279,23 +330,25 @@ if __name__ == '__main__':
 
     if ret:
         # 如果没取到余额，尝试修改_init_函数里面sleep的值，或者查余额的id是不是变了。
-        trader = {myRegister[broker.account]: broker for broker in ret}  # 给账户一个易记的外号
-        trader1 = {broker.account[-3:]: broker.balance() for broker in ret}  # 以登录号3位尾数作代号
+        trader = {myRegister[broker.account]: broker
+                  for broker in ret}  # 给账户一个易记的外号
+        trader1 = {broker.account[-3:]: broker.balance()
+                   for broker in ret}  # 以登录号3位尾数作代号
         profile = {solo: {"交易帐号": trader[solo].account, \
                           "可用余额": trader[solo].balance()} \
                    for solo in trader}
 
-        print(profile)
-        # print(json.dumps(profile, indent=4, ensure_ascii=False, sort_keys=True))
+        print_time(profile)
+        # print_time(json.dumps(profile, indent=4, ensure_ascii=False, sort_keys=True))
 
         raw = trader['东方不败'].get_data()  # 只能“大写字母”，小写字母THS会崩溃，无语！
-        print(raw)
-        # print(to_dict(raw))
+        print_time(raw)
+        # print_time(to_dict(raw))
 
         raw = trader['东方不败'].get_data('R')
-        print(raw)
-        # print(json.dumps(to_dict(raw), indent=4, ensure_ascii=False))
+        print_time(raw)
+        # print_time(json.dumps(to_dict(raw), indent=4, ensure_ascii=False))
         trader['东方不败'].cancel_order('')
 
     else:
-        print("老板，没发现已登录的交易端！")
+        print_time("老板，没发现已登录的交易端！")
